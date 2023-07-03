@@ -50,7 +50,7 @@
 <style scoped></style>
 <script setup>
 import { getLabel, getNote, updateNoteDelta } from '../src/api/notes'
-import { isLocked, updateLock } from '../src/api/lock'
+import { isLocked as getLockStatus, unlock as doUnlock, locked as doLocked } from '../src/api/lock'
 import { onMounted, nextTick, ref, watch } from 'vue';
 const id = ref(0)
 var lock = ref(false)
@@ -78,7 +78,7 @@ function renderNote(editor, label) {
             var content = JSON.parse(data['content'])
             editor.setContents(content)
             id.value = data['id']
-            getLockStatus();
+            isLocked();
         }
     }).catch(function (error) {
         console.log(error)
@@ -123,19 +123,19 @@ onMounted(() => {
         init();
     })
 });
-function getLockStatus() {
-    isLocked(id.value).then(res => {
+function isLocked() {
+    getLockStatus(id.value).then(res => {
         lock.value = res.data
     })
 }
 
 function locked() {
-    updateLock(id.value, true).then(res => {
-        lock.value = true
+    doLocked(id.value).then(res => {
+       lock.value = true
     })
 }
 function unLock() {
-    updateLock(id.value, false).then(res => {
+    doUnlock(id.value).then(res => {
         lock.value = false
     })
 }

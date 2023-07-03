@@ -20,3 +20,27 @@ export function updateLock(noteId,locked){
         data: lock
     })
 }
+
+export function locked(noteId,password){
+    const lock = {
+        noteId:noteId,
+        password:password
+    }
+    return request({
+        method: 'POST',
+        url: '/locked',
+        data: lock
+    })
+}
+
+export function unlock(noteId,password){
+    const lock = {
+        noteId:noteId,
+        password:password
+    }
+    return request({
+        method: 'POST',
+        url: '/unlock',
+        data: lock
+    })
+}
