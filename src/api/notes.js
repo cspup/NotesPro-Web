@@ -27,4 +27,11 @@ export function updateNoteDelta(id,label,delta){
     })
 }
 
+export function wsGetId(label) {
+    return request({
+        method: 'GET',
+        url: '/ws/getId'
+    })
+}
+
 

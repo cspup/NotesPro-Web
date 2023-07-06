@@ -30,6 +30,9 @@
                 <path d="M24 30V36" stroke="#333" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
             </svg>
         </button>
+        <modal v-if="showModal" @close="showModal = false">
+            <div>hello</div>
+        </modal>
         <button class="delete" title="delete" type="button">
             <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M9 10V44H39V10H9Z" fill="none" stroke="#333" stroke-width="4" stroke-linejoin="round" />
@@ -47,18 +50,34 @@
     </div>
 </template>
 
-<style scoped></style>
 <script setup>
-import { getLabel, getNote, updateNoteDelta } from '../src/api/notes'
+import { getLabel, getNote, wsGetId } from '../src/api/notes'
 import { isLocked as getLockStatus, unlock as doUnlock, locked as doLocked } from '../src/api/lock'
 import { onMounted, nextTick, ref, watch } from 'vue';
+
 const id = ref(0)
 var lock = ref(false)
+const showModal = false
+var ws
+var logicTime=0
+var note = {
+    id:0,
+    label:'',
+    content:'',
+    logicTime:0
+}
+var wsId = 0
+var editor
 function handleUpdate(delta, label) {
-    updateNoteDelta(id.value, label, delta).then(res => {
-    }).catch(err => {
-        console.log(err)
-    })
+    note.id = id.value;
+    note.label = label;
+    note.content = JSON.stringify(delta);
+    note.logicTime = logicTime+1;
+    ws.send(JSON.stringify(note));
+    // updateNoteDelta(id.value, label, delta).then(res => {
+    // }).catch(err => {
+    //     console.log(err)
+    // })
 }
 
 function createLabel() {
@@ -78,6 +97,7 @@ function renderNote(editor, label) {
             var content = JSON.parse(data['content'])
             editor.setContents(content)
             id.value = data['id']
+            logicTime = data['logicTime']
             isLocked();
         }
     }).catch(function (error) {
@@ -95,7 +115,13 @@ function init() {
     } else {
         label = pathname.substring(1, pathname.length);
     }
-    var editor = new Quill('#editor', {
+    wsGetId().then(res => {
+        wsId = res.data;
+        ws = initWebSocket(wsId,label);
+    }).catch(error => {
+        console.log(error)
+    })
+    editor = new Quill('#editor', {
         modules: { toolbar: '#toolbar' },
         theme: 'snow',
     });
@@ -116,6 +142,7 @@ function init() {
             editor.enable();
         }
     });
+    
 }
 onMounted(() => {
     nextTick(() => {
@@ -131,7 +158,7 @@ function isLocked() {
 
 function locked() {
     doLocked(id.value).then(res => {
-       lock.value = true
+        lock.value = true
     })
 }
 function unLock() {
@@ -140,5 +167,63 @@ function unLock() {
     })
 }
 
+/**
+ * 初始化websocket连接
+ */
+function initWebSocket(wsId,label) {
+    let uId = wsId;
+    var websocket = null;
+    if ('WebSocket' in window) {
+        websocket = new WebSocket("ws://localhost:8848/noteWs/" + uId+"?label="+label);
+    } else {
+        alert("该浏览器不支持websocket！");
+    }
+    websocket.onopen = function (event) {
+        console.log("建立连接");
+        // websocket.send('Hello WebSockets!');
+    }
+    websocket.onclose = function (event) {
+        console.log('连接关闭')
+        reconnect(label); //尝试重连websocket
+    }
+    //建立通信后，监听到后端的数据传递
+    websocket.onmessage = function (event) {
+        let data = JSON.parse(event.data);
+        // 记录光标位置
+        let index = editor.selection.savedRange.index
+        let content = JSON.parse(data.content)
+        logicTime = data.logicTime;
+        editor.setContents(content)
+        editor.setSelection(index)
+    }
+    websocket.onerror = function () {
+        notify.warn("websocket通信发生错误！");
+        initWebSocket()
+    }
+    window.onbeforeunload = function () {
+        websocket.close();
+    }
+    return websocket
+}
+    // 重连
+function reconnect(label) {
+    console.log("正在重连");
+    // 进行重连
+    setTimeout(function () {
+        wsGetId().then(res => {
+            wsId = res.data;
+            ws = initWebSocket(wsId,label);
+        }).catch(error => {
+            console.log(error)
+        })
+    }, 1000);
+}
+
+
 
 </script>
+<style scoped>
+#editor{
+    caret-color:red;
+}
+</style>
