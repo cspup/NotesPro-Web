@@ -45,7 +45,7 @@
         </button>
 
     </div>
-    <div id="editor">
+    <div id="editor" ref="editor_ref">
         <p>Hello World!</p>
     </div>
 </template>
@@ -54,26 +54,32 @@
 import { getLabel, getNote, wsGetId } from '../src/api/notes'
 import { isLocked as getLockStatus, unlock as doUnlock, locked as doLocked } from '../src/api/lock'
 import { onMounted, nextTick, ref, watch } from 'vue';
+import Quill from 'quill'
+import 'quill/dist/quill.core.css'
+import 'quill/dist/quill.snow.css'
+import { websocketURL } from './utils/request'
 
 const id = ref(0)
 var lock = ref(false)
-const showModal = false
-var ws
+var showModal = false
 var logicTime=0
-var note = {
+const note = {
     id:0,
     label:'',
     content:'',
     logicTime:0
 }
 var wsId = 0
-var editor
+var editor = null
+const editor_ref = ref(null)
+var label
+let websocket
 function handleUpdate(delta, label) {
     note.id = id.value;
     note.label = label;
     note.content = JSON.stringify(delta);
     note.logicTime = logicTime+1;
-    ws.send(JSON.stringify(note));
+    websocket.send(JSON.stringify(note));
     // updateNoteDelta(id.value, label, delta).then(res => {
     // }).catch(err => {
     //     console.log(err)
@@ -82,7 +88,7 @@ function handleUpdate(delta, label) {
 
 function createLabel() {
     getLabel().then(res => {
-        var label = res.data;
+        label = res.data;
         window.location.replace("/" + label);
         return label
     }).catch(error => {
@@ -92,9 +98,9 @@ function createLabel() {
 
 function renderNote(editor, label) {
     getNote(label).then(res => {
-        const data = res.data;
+        let data = res.data;
         if (data) {
-            var content = JSON.parse(data['content'])
+            let content = JSON.parse(data['content'])
             editor.setContents(content)
             id.value = data['id']
             logicTime = data['logicTime']
@@ -107,9 +113,12 @@ function renderNote(editor, label) {
 
 
 function init() {
+    editor = new Quill('#editor', {
+        modules: { toolbar: '#toolbar' },
+        theme: 'snow',
+    });
     // 初始化
-    var label;
-    const pathname = window.location.pathname;
+    let pathname = window.location.pathname;
     if (pathname.length <= 1) {
         label = createLabel();
     } else {
@@ -117,14 +126,11 @@ function init() {
     }
     wsGetId().then(res => {
         wsId = res.data;
-        ws = initWebSocket(wsId,label);
+        initWebSocket(wsId,label);
     }).catch(error => {
         console.log(error)
     })
-    editor = new Quill('#editor', {
-        modules: { toolbar: '#toolbar' },
-        theme: 'snow',
-    });
+
     renderNote(editor, label);
     editor.on('text-change', function (delta, oldDelta, source) {
         if (source === 'api') {
@@ -172,9 +178,9 @@ function unLock() {
  */
 function initWebSocket(wsId,label) {
     let uId = wsId;
-    var websocket = null;
+    websocket = null;
     if ('WebSocket' in window) {
-        websocket = new WebSocket("ws://localhost:8848/noteWs/" + uId+"?label="+label);
+        websocket = new WebSocket(websocketURL + '/noteWs/' + uId+"?label="+label);
     } else {
         alert("该浏览器不支持websocket！");
     }
@@ -212,7 +218,7 @@ function reconnect(label) {
     setTimeout(function () {
         wsGetId().then(res => {
             wsId = res.data;
-            ws = initWebSocket(wsId,label);
+            initWebSocket(wsId,label);
         }).catch(error => {
             console.log(error)
         })
